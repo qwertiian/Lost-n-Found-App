@@ -1,11 +1,14 @@
 package com.example.lostandfound;
 
+import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.MenuItem;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import com.google.android.material.textfield.TextInputEditText;
 
 public class ProfileActivity extends AppCompatActivity {
@@ -14,18 +17,28 @@ public class ProfileActivity extends AppCompatActivity {
     private DatabaseHelper databaseHelper;
     private SharedPreferences sharedPreferences;
     private long userId;
+    private Toolbar toolbar;
 
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
+
+        // Initialize toolbar
+        toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayShowHomeEnabled(true);
+            getSupportActionBar().setTitle("My Profile");
+        }
 
         // Initialize views
         etName = findViewById(R.id.etName);
         etEmail = findViewById(R.id.etEmail);
         etPhone = findViewById(R.id.etPhone);
         Button btnUpdate = findViewById(R.id.btnUpdate);
-        Button btnBack = findViewById(R.id.btnBack);
 
         databaseHelper = new DatabaseHelper(this);
         sharedPreferences = getSharedPreferences("LostAndFoundPrefs", MODE_PRIVATE);
@@ -35,7 +48,15 @@ public class ProfileActivity extends AppCompatActivity {
         loadProfileData();
 
         btnUpdate.setOnClickListener(v -> updateProfile());
-        btnBack.setOnClickListener(v -> finish());
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     private void loadProfileData() {
@@ -66,7 +87,6 @@ public class ProfileActivity extends AppCompatActivity {
         updatedUser.setPhone(phone);
         updatedUser.setAdmin(sharedPreferences.getBoolean("isAdmin", false));
 
-        // In a real app, you would have an updateUser method in DatabaseHelper
         boolean success = databaseHelper.updateUser(updatedUser);
 
         if (success) {
@@ -81,5 +101,11 @@ public class ProfileActivity extends AppCompatActivity {
         } else {
             Toast.makeText(this, "Failed to update profile", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        overridePendingTransition(R.anim.slide_out_left, R.anim.slide_in_right);
     }
 }

@@ -4,13 +4,18 @@ import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.MenuItem;
 import android.widget.Button;
-import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public class AdminDashboardActivity extends AppCompatActivity implements PendingClaimsAdapter.OnClaimActionListener {
@@ -18,9 +23,10 @@ public class AdminDashboardActivity extends AppCompatActivity implements Pending
     private TextView tvWelcome;
     private RecyclerView rvPendingClaims;
     private Button btnViewAllItems, btnLogout;
-    private ImageButton btnBack;
+    private Toolbar toolbar;
     private DatabaseHelper databaseHelper;
     private SharedPreferences sharedPreferences;
+    private PendingClaimsAdapter adapter;
 
     @SuppressLint("MissingInflatedId")
     @Override
@@ -28,12 +34,26 @@ public class AdminDashboardActivity extends AppCompatActivity implements Pending
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_admin_dashboard);
 
+        // Initialize toolbar
+        toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayShowHomeEnabled(true);
+            getSupportActionBar().setTitle("Admin Dashboard");
+        }
+
         // Initialize views
         tvWelcome = findViewById(R.id.tvWelcome);
         rvPendingClaims = findViewById(R.id.rvPendingClaims);
         btnViewAllItems = findViewById(R.id.btnViewAllItems);
         btnLogout = findViewById(R.id.btnLogout);
-        btnBack = findViewById(R.id.btnBack);
+
+        Button btnPendingClaims = findViewById(R.id.btnPendingClaims);
+        btnPendingClaims.setOnClickListener(v -> {
+            // Refresh the claims list when the button is clicked
+            refreshClaimsList();
+        });
 
         databaseHelper = new DatabaseHelper(this);
         sharedPreferences = getSharedPreferences("LostAndFoundPrefs", MODE_PRIVATE);
@@ -52,24 +72,27 @@ public class AdminDashboardActivity extends AppCompatActivity implements Pending
 
         btnViewAllItems.setOnClickListener(v -> {
             startActivity(new Intent(AdminDashboardActivity.this, ItemsListActivity.class));
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
         });
 
         btnLogout.setOnClickListener(v -> logout());
-        btnBack.setOnClickListener(v -> finish());
     }
 
     private void setupPendingClaimsRecycler() {
         try {
-            List<Item> pendingClaims = databaseHelper.getItemsByStatus("claimed");
-            if (pendingClaims != null && !pendingClaims.isEmpty()) {
-                PendingClaimsAdapter adapter = new PendingClaimsAdapter(pendingClaims, this);
-                rvPendingClaims.setLayoutManager(new LinearLayoutManager(this));
-                rvPendingClaims.setAdapter(adapter);
-            } else {
+            List<Item> pendingClaims = databaseHelper.getPendingClaims();
+
+            // Always set up the adapter, even if the list is empty
+            adapter = new PendingClaimsAdapter(pendingClaims != null ? pendingClaims : new ArrayList<>(), this);
+            rvPendingClaims.setLayoutManager(new LinearLayoutManager(this));
+            rvPendingClaims.setAdapter(adapter);
+
+            // Show a message if there are no claims, but don't exit the method
+            if (pendingClaims == null || pendingClaims.isEmpty()) {
                 Toast.makeText(this, "No pending claims found", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Error loading claims", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error loading claims: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
@@ -77,21 +100,27 @@ public class AdminDashboardActivity extends AppCompatActivity implements Pending
     private void logout() {
         sharedPreferences.edit().clear().apply();
         startActivity(new Intent(this, LoginActivity.class));
-        finish();
+        finishAffinity();
     }
 
+    // Also update the parameter types in your onApproveClaim and onRejectClaim methods:
     @Override
     public void onApproveClaim(Item item) {
         try {
-            int result = databaseHelper.updateItemStatus(item.getId(), "returned", item.getClaimerId(), item.getClaimProof());
-            if (result > 0) {
-                Toast.makeText(this, "Claim approved", Toast.LENGTH_SHORT).show();
-                setupPendingClaimsRecycler();
+            boolean result = databaseHelper.approveClaim(
+                    item.getId(),
+                    item.getClaimerId(),
+                    item.getClaimProof()
+            );
+
+            if (result) {
+                Toast.makeText(this, "Claim approved successfully", Toast.LENGTH_SHORT).show();
+                refreshClaimsList();
             } else {
                 Toast.makeText(this, "Failed to approve claim", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Error approving claim", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error approving claim: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
@@ -99,22 +128,44 @@ public class AdminDashboardActivity extends AppCompatActivity implements Pending
     @Override
     public void onRejectClaim(Item item) {
         try {
-            int result = databaseHelper.updateItemStatus(item.getId(), "lost", -1, null);
-            if (result > 0) {
-                Toast.makeText(this, "Claim rejected", Toast.LENGTH_SHORT).show();
-                setupPendingClaimsRecycler();
+            boolean result = databaseHelper.rejectClaim(item.getId());
+            if (result) {
+                Toast.makeText(this, "Claim rejected successfully", Toast.LENGTH_SHORT).show();
+                refreshClaimsList();
             } else {
                 Toast.makeText(this, "Failed to reject claim", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Error rejecting claim", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error rejecting claim: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
+        }
+    }
+
+    private void refreshClaimsList() {
+        List<Item> updatedClaims = databaseHelper.getPendingClaims();
+        if (adapter != null) {
+            adapter.updateData(updatedClaims);
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        setupPendingClaimsRecycler();
+        refreshClaimsList();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        overridePendingTransition(R.anim.slide_out_left, R.anim.slide_in_right);
     }
 }

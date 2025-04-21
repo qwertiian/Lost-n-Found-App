@@ -1,11 +1,16 @@
 package com.example.lostandfound;
 
+import static android.app.DownloadManager.COLUMN_ID;
+import static android.app.DownloadManager.COLUMN_STATUS;
+
 import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -96,35 +101,44 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return id;
     }
 
+    @SuppressLint("Range")
     public User getUser(long userId) {
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.query(TABLE_USERS,
-                new String[]{COLUMN_USER_ID, COLUMN_USER_NAME, COLUMN_USER_EMAIL, COLUMN_USER_PHONE, COLUMN_IS_ADMIN},
-                COLUMN_USER_ID + "=?",
-                new String[]{String.valueOf(userId)}, null, null, null, null);
+        User user = null;
+        Cursor cursor = null;
 
-        if (cursor != null)
-            cursor.moveToFirst();
+        try {
+            cursor = db.query(TABLE_USERS,
+                    new String[]{COLUMN_USER_ID, COLUMN_USER_NAME, COLUMN_USER_EMAIL, COLUMN_USER_PHONE, COLUMN_IS_ADMIN},
+                    COLUMN_USER_ID + "=?",
+                    new String[]{String.valueOf(userId)}, null, null, null);
 
-        @SuppressLint("Range") User user = new User(
-                cursor.getLong(cursor.getColumnIndex(COLUMN_USER_ID)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_USER_NAME)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_USER_EMAIL)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_USER_PHONE)),
-                cursor.getInt(cursor.getColumnIndex(COLUMN_IS_ADMIN)) == 1);
-
-        cursor.close();
+            if (cursor != null && cursor.moveToFirst()) {
+                user = new User(
+                        cursor.getLong(cursor.getColumnIndex(COLUMN_USER_ID)),
+                        cursor.getString(cursor.getColumnIndex(COLUMN_USER_NAME)),
+                        cursor.getString(cursor.getColumnIndex(COLUMN_USER_EMAIL)),
+                        cursor.getString(cursor.getColumnIndex(COLUMN_USER_PHONE)),
+                        cursor.getInt(cursor.getColumnIndex(COLUMN_IS_ADMIN)) == 1
+                );
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+            db.close();
+        }
         return user;
     }
 
-    // Add this method to DatabaseHelper.java
     @SuppressLint("Range")
     public User authenticateAdmin(String username, String password) {
         SQLiteDatabase db = this.getReadableDatabase();
         User user = null;
+        Cursor cursor = null;
 
         try {
-            Cursor cursor = db.query(TABLE_USERS,
+            cursor = db.query(TABLE_USERS,
                     new String[]{COLUMN_USER_ID, COLUMN_USER_NAME, COLUMN_USER_EMAIL, COLUMN_USER_PHONE, COLUMN_IS_ADMIN},
                     COLUMN_USER_NAME + "=? AND " + COLUMN_IS_ADMIN + "=?",
                     new String[]{username, "1"},
@@ -141,106 +155,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                             true
                     );
                 }
-                cursor.close();
             }
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
+            if (cursor != null) cursor.close();
             db.close();
         }
         return user;
     }
 
-    // Item methods
-    public long addItem(Item item) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_ITEM_NAME, item.getName());
-        values.put(COLUMN_ITEM_DESCRIPTION, item.getDescription());
-        values.put(COLUMN_ITEM_DATE, item.getDate());
-        values.put(COLUMN_ITEM_LOCATION, item.getLocation());
-        values.put(COLUMN_ITEM_IMAGE, item.getImage());
-        values.put(COLUMN_ITEM_STATUS, item.getStatus());
-        values.put(COLUMN_REPORTER_ID, item.getReporterId());
-
-        long id = db.insert(TABLE_ITEMS, null, values);
-        db.close();
-        return id;
-    }
-
-    @SuppressLint("Range")
-    public List<Item> getAllItems() {
-        List<Item> itemList = new ArrayList<>();
-        String selectQuery = "SELECT * FROM " + TABLE_ITEMS + " ORDER BY " + COLUMN_ITEM_DATE + " DESC";
-        SQLiteDatabase db = this.getWritableDatabase();
-        Cursor cursor = db.rawQuery(selectQuery, null);
-
-        if (cursor.moveToFirst()) {
-            do {
-                Item item = new Item();
-                item.setId(cursor.getLong(cursor.getColumnIndex(COLUMN_ITEM_ID)));
-                item.setName(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_NAME)));
-                item.setDescription(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_DESCRIPTION)));
-                item.setDate(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_DATE)));
-                item.setLocation(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_LOCATION)));
-                item.setImage(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_IMAGE)));
-                item.setStatus(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_STATUS)));
-                item.setReporterId(cursor.getLong(cursor.getColumnIndex(COLUMN_REPORTER_ID)));
-                item.setClaimerId(cursor.getLong(cursor.getColumnIndex(COLUMN_CLAIMER_ID)));
-                item.setClaimProof(cursor.getString(cursor.getColumnIndex(COLUMN_CLAIM_PROOF)));
-
-                itemList.add(item);
-            } while (cursor.moveToNext());
-        }
-        cursor.close();
-        db.close();
-        return itemList;
-    }
-
-    public Item getItem(long itemId) {
-        SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.query(TABLE_ITEMS,
-                new String[]{COLUMN_ITEM_ID, COLUMN_ITEM_NAME, COLUMN_ITEM_DESCRIPTION,
-                        COLUMN_ITEM_DATE, COLUMN_ITEM_LOCATION, COLUMN_ITEM_IMAGE,
-                        COLUMN_ITEM_STATUS, COLUMN_REPORTER_ID, COLUMN_CLAIMER_ID, COLUMN_CLAIM_PROOF},
-                COLUMN_ITEM_ID + "=?",
-                new String[]{String.valueOf(itemId)}, null, null, null, null);
-
-        if (cursor != null)
-            cursor.moveToFirst();
-
-        @SuppressLint("Range") Item item = new Item(
-                cursor.getLong(cursor.getColumnIndex(COLUMN_ITEM_ID)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_NAME)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_DESCRIPTION)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_DATE)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_LOCATION)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_IMAGE)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_STATUS)),
-                cursor.getLong(cursor.getColumnIndex(COLUMN_REPORTER_ID)),
-                cursor.getLong(cursor.getColumnIndex(COLUMN_CLAIMER_ID)),
-                cursor.getString(cursor.getColumnIndex(COLUMN_CLAIM_PROOF)));
-
-        cursor.close();
-        return item;
-    }
-
-    public int updateItemStatus(long itemId, String status, long claimerId, String claimProof) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_ITEM_STATUS, status);
-        if (claimerId != -1) {
-            values.put(COLUMN_CLAIMER_ID, claimerId);
-        }
-        if (claimProof != null) {
-            values.put(COLUMN_CLAIM_PROOF, claimProof);
-        }
-
-        return db.update(TABLE_ITEMS, values, COLUMN_ITEM_ID + " = ?",
-                new String[]{String.valueOf(itemId)});
-    }
-
-    // Add this to your DatabaseHelper class
     public boolean updateUser(User user) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
@@ -257,6 +181,159 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
     @SuppressLint("Range")
+    public List<Item> getAllItems() {
+        List<Item> itemList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+
+        try {
+            cursor = db.query(TABLE_ITEMS,
+                    null,
+                    null, null, null, null,
+                    COLUMN_ITEM_DATE + " DESC");
+
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    Item item = cursorToItem(cursor);
+                    itemList.add(item);
+                } while (cursor.moveToNext());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+            db.close();
+        }
+        return itemList;
+    }
+
+    @SuppressLint("Range")
+    public Item getItem(long itemId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Item item = null;
+        Cursor cursor = null;
+
+        try {
+            cursor = db.query(TABLE_ITEMS,
+                    null,
+                    COLUMN_ITEM_ID + "=?",
+                    new String[]{String.valueOf(itemId)},
+                    null, null, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                item = cursorToItem(cursor);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+            db.close();
+        }
+        return item;
+    }
+
+    public int updateItemStatus(long itemId, String status, long claimerId, String claimProof) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_ITEM_STATUS, status);
+
+        if (claimerId != -1) {
+            values.put(COLUMN_CLAIMER_ID, claimerId);
+        } else {
+            values.putNull(COLUMN_CLAIMER_ID);
+        }
+
+        if (claimProof != null) {
+            values.put(COLUMN_CLAIM_PROOF, claimProof);
+        } else {
+            values.putNull(COLUMN_CLAIM_PROOF);
+        }
+
+        int result = db.update(TABLE_ITEMS, values,
+                COLUMN_ITEM_ID + " = ?",
+                new String[]{String.valueOf(itemId)});
+
+        db.close();
+        return result;
+    }
+
+    @SuppressLint("Range")
+    public List<Item> getItemsByStatus(String status) {
+        List<Item> items = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+
+        try {
+            cursor = db.query(TABLE_ITEMS,
+                    null,
+                    COLUMN_ITEM_STATUS + " = ?",
+                    new String[]{status},
+                    null, null,
+                    COLUMN_ITEM_DATE + " DESC");
+
+            if (cursor != null && cursor.moveToFirst()) {
+                do {
+                    Item item = cursorToItem(cursor);
+                    items.add(item);
+                } while (cursor.moveToNext());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (cursor != null) cursor.close();
+            db.close();
+        }
+        return items;
+    }
+
+    // Replace the getPendingClaims method with this corrected version:
+    public List<Item> getPendingClaims() {
+        List<Item> claims = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        String query = "SELECT * FROM " + TABLE_ITEMS +
+                " WHERE " + COLUMN_ITEM_STATUS + " = 'claimed'";
+
+        Cursor cursor = db.rawQuery(query, null);
+
+        if (cursor.moveToFirst()) {
+            do {
+                Item item = cursorToItem(cursor);
+                claims.add(item);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return claims;
+    }
+
+    // Also fix the approveClaim and rejectClaim methods:
+    public boolean approveClaim(long itemId, long claimerId, String claimProof) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_ITEM_STATUS, "returned");
+        values.put(COLUMN_CLAIMER_ID, claimerId);
+        values.put(COLUMN_CLAIM_PROOF, claimProof);
+
+        int rowsAffected = db.update(TABLE_ITEMS, values,
+                COLUMN_ITEM_ID + " = ?", new String[]{String.valueOf(itemId)});
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    public boolean rejectClaim(long itemId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_ITEM_STATUS, "lost");
+        values.putNull(COLUMN_CLAIMER_ID);
+        values.putNull(COLUMN_CLAIM_PROOF);
+
+        int rowsAffected = db.update(TABLE_ITEMS, values,
+                COLUMN_ITEM_ID + " = ?", new String[]{String.valueOf(itemId)});
+        db.close();
+        return rowsAffected > 0;
+    }
+    @SuppressLint("Range")
     private Item cursorToItem(Cursor cursor) {
         Item item = new Item();
         item.setId(cursor.getLong(cursor.getColumnIndex(COLUMN_ITEM_ID)));
@@ -267,56 +344,42 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         item.setImage(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_IMAGE)));
         item.setStatus(cursor.getString(cursor.getColumnIndex(COLUMN_ITEM_STATUS)));
         item.setReporterId(cursor.getLong(cursor.getColumnIndex(COLUMN_REPORTER_ID)));
-        item.setClaimerId(cursor.getLong(cursor.getColumnIndex(COLUMN_CLAIMER_ID)));
-        item.setClaimProof(cursor.getString(cursor.getColumnIndex(COLUMN_CLAIM_PROOF)));
+
+        // Handle nullable columns
+        int claimerIdIndex = cursor.getColumnIndex(COLUMN_CLAIMER_ID);
+        if (!cursor.isNull(claimerIdIndex)) {
+            item.setClaimerId(cursor.getLong(claimerIdIndex));
+        } else {
+            item.setClaimerId(-1); // or whatever default value you prefer
+        }
+
+        int proofIndex = cursor.getColumnIndex(COLUMN_CLAIM_PROOF);
+        if (!cursor.isNull(proofIndex)) {
+            item.setClaimProof(cursor.getString(proofIndex));
+        }
+
         return item;
     }
 
-    public List<Item> getItemsByStatus(String status) {
-        List<Item> items = new ArrayList<>();
-        SQLiteDatabase db = null;
-        Cursor cursor = null;
-
+    public long addItem(Item item) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        long id = -1;
         try {
-            db = this.getReadableDatabase();
-            cursor = db.query(TABLE_ITEMS,
-                    null,
-                    COLUMN_ITEM_STATUS + " = ?",
-                    new String[]{status},
-                    null, null, COLUMN_ITEM_DATE + " DESC");
+            ContentValues values = new ContentValues();
+            values.put(COLUMN_ITEM_NAME, item.getName());
+            values.put(COLUMN_ITEM_DESCRIPTION, item.getDescription());
+            values.put(COLUMN_ITEM_DATE, item.getDate());
+            values.put(COLUMN_ITEM_LOCATION, item.getLocation());
+            values.put(COLUMN_ITEM_IMAGE, item.getImage());
+            values.put(COLUMN_ITEM_STATUS, item.getStatus());
+            values.put(COLUMN_REPORTER_ID, item.getReporterId());
 
-            if (cursor != null && cursor.moveToFirst()) {
-                do {
-                    Item item = new Item();
-                    item.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_ITEM_ID)));
-                    item.setName(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_NAME)));
-                    item.setDescription(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_DESCRIPTION)));
-                    item.setDate(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_DATE)));
-                    item.setLocation(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_LOCATION)));
-                    item.setImage(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_IMAGE)));
-                    item.setStatus(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_STATUS)));
-                    item.setReporterId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_REPORTER_ID)));
-
-                    // Handle nullable columns
-                    int claimerIdIndex = cursor.getColumnIndex(COLUMN_CLAIMER_ID);
-                    if (!cursor.isNull(claimerIdIndex)) {
-                        item.setClaimerId(cursor.getLong(claimerIdIndex));
-                    }
-
-                    int proofIndex = cursor.getColumnIndex(COLUMN_CLAIM_PROOF);
-                    if (!cursor.isNull(proofIndex)) {
-                        item.setClaimProof(cursor.getString(proofIndex));
-                    }
-
-                    items.add(item);
-                } while (cursor.moveToNext());
-            }
+            id = db.insert(TABLE_ITEMS, null, values);
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e("DatabaseHelper", "Error adding item", e);
         } finally {
-            if (cursor != null) cursor.close();
-            if (db != null) db.close();
+            db.close();
         }
-        return items;
+        return id;
     }
 }

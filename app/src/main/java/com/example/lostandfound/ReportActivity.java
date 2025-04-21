@@ -1,11 +1,13 @@
 package com.example.lostandfound;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -39,6 +41,7 @@ public class ReportActivity extends AppCompatActivity {
     private String imagePath = "";
     private int progress = 0;
 
+    @SuppressLint("WrongViewCast")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,23 +55,34 @@ public class ReportActivity extends AppCompatActivity {
 
         // Setup listeners
         setupListeners();
+
+        if (btnBack == null) {
+            btnBack = findViewById(R.id.btnBack);
+        }
     }
 
+    @SuppressLint("WrongViewCast")
     private void initializeViews() {
-        etItemName = findViewById(R.id.etItemName);
-        etDate = findViewById(R.id.etDate);
-        etLocation = findViewById(R.id.etLocation);
-        etDescription = findViewById(R.id.etDescription);
-        btnAddImage = findViewById(R.id.btnAddImage);
-        btnTakePhoto = findViewById(R.id.btnTakePhoto);
-        btnSubmit = findViewById(R.id.btnSubmit);
-        ivItem = findViewById(R.id.ivItem);
-        progressBar = findViewById(R.id.progressBar);
-        tvProgress = findViewById(R.id.tvProgress);
-        btnBack = findViewById(R.id.btnBack);
+        try {
+            etItemName = findViewById(R.id.etItemName);
+            etDate = findViewById(R.id.etDate);
+            etLocation = findViewById(R.id.etLocation);
+            etDescription = findViewById(R.id.etDescription);
+            btnAddImage = findViewById(R.id.btnAddImage);
+            btnTakePhoto = findViewById(R.id.btnTakePhoto);
+            btnSubmit = findViewById(R.id.btnSubmit);
+            ivItem = findViewById(R.id.ivItem);
+            progressBar = findViewById(R.id.progressBar);
+            tvProgress = findViewById(R.id.tvProgress);
+            btnBack = findViewById(R.id.btnBack);
 
-        databaseHelper = new DatabaseHelper(this);
-        sharedPreferences = getSharedPreferences("LostAndFoundPrefs", MODE_PRIVATE);
+            // Initialize database and shared preferences
+            databaseHelper = new DatabaseHelper(this);
+            sharedPreferences = getSharedPreferences("LostAndFoundPrefs", MODE_PRIVATE);
+        } catch (Exception e) {
+            Toast.makeText(this, "Error initializing views: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            finish();
+        }
     }
 
     private void setDefaultDate() {
@@ -91,29 +105,61 @@ public class ReportActivity extends AppCompatActivity {
         etLocation.addTextChangedListener(progressWatcher);
         etDescription.addTextChangedListener(progressWatcher);
 
-        // Button click listeners
-        btnBack.setOnClickListener(v -> finish());
+        // Back button listener
+        btnBack.setOnClickListener(v -> {
+            if (hasUnsavedChanges()) {
+                showExitConfirmationDialog();
+            } else {
+                finish();
+            }
+        });
 
         btnAddImage.setOnClickListener(v -> openGallery());
-
         btnTakePhoto.setOnClickListener(v -> openCamera());
-
         btnSubmit.setOnClickListener(v -> submitReport());
+    }
+
+    private boolean hasUnsavedChanges() {
+        return !etItemName.getText().toString().isEmpty() ||
+                !etLocation.getText().toString().isEmpty() ||
+                !etDescription.getText().toString().isEmpty() ||
+                !imagePath.isEmpty();
+    }
+
+    private void showExitConfirmationDialog() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Discard Changes?")
+                .setMessage("You have unsaved changes. Are you sure you want to exit?")
+                .setPositiveButton("Discard", (dialog, which) -> finish())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (hasUnsavedChanges()) {
+            showExitConfirmationDialog();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     private void updateProgress() {
         int totalFields = 4; // name, date, location, description
         int filledFields = 0;
 
-        if (!etItemName.getText().toString().trim().isEmpty()) filledFields++;
-        if (!etDate.getText().toString().trim().isEmpty()) filledFields++;
-        if (!etLocation.getText().toString().trim().isEmpty()) filledFields++;
-        if (!etDescription.getText().toString().trim().isEmpty()) filledFields++;
+        // Safely check each field
+        if (etItemName.getText() != null && !etItemName.getText().toString().trim().isEmpty()) filledFields++;
+        if (etDate.getText() != null && !etDate.getText().toString().trim().isEmpty()) filledFields++;
+        if (etLocation.getText() != null && !etLocation.getText().toString().trim().isEmpty()) filledFields++;
+        if (etDescription.getText() != null && !etDescription.getText().toString().trim().isEmpty()) filledFields++;
 
         progress = (filledFields * 100) / totalFields;
         progressBar.setProgress(progress);
         tvProgress.setText("Progress: " + progress + "%");
-        btnSubmit.setEnabled(progress == 100);
+
+        // Enable submit only when all required fields are filled
+        btnSubmit.setEnabled(filledFields == totalFields);
     }
 
     private void openGallery() {
@@ -130,6 +176,8 @@ public class ReportActivity extends AppCompatActivity {
         Toast.makeText(this, "Camera functionality coming soon", Toast.LENGTH_SHORT).show();
     }
 
+
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -138,26 +186,29 @@ public class ReportActivity extends AppCompatActivity {
             if (imageUri != null) {
                 ivItem.setImageURI(imageUri);
                 imagePath = imageUri.toString();
+                updateProgress();
             }
         }
     }
 
+    // Update the submitReport method with better error handling
     private void submitReport() {
         try {
-            // Validate inputs
+            if (etItemName == null || etDate == null || etLocation == null || etDescription == null) {
+                Toast.makeText(this, "Form fields not properly initialized", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             String itemName = etItemName.getText().toString().trim();
             String date = etDate.getText().toString().trim();
             String location = etLocation.getText().toString().trim();
             String description = etDescription.getText().toString().trim();
+
             long reporterId = sharedPreferences.getLong("userId", -1);
-
             if (reporterId == -1) {
-                Toast.makeText(this, "Please login again", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            if (itemName.isEmpty() || date.isEmpty() || location.isEmpty()) {
-                Toast.makeText(this, "Please fill required fields", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "User session expired. Please login again.", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(this, LoginActivity.class));
+                finish();
                 return;
             }
 
@@ -174,12 +225,13 @@ public class ReportActivity extends AppCompatActivity {
             long id = databaseHelper.addItem(item);
             if (id != -1) {
                 Toast.makeText(this, "Report submitted successfully", Toast.LENGTH_SHORT).show();
+                setResult(RESULT_OK);
                 finish();
             } else {
                 Toast.makeText(this, "Failed to submit report", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Error submitting report: " + e.getMessage(), Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }

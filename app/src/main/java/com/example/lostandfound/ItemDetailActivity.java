@@ -1,16 +1,20 @@
 package com.example.lostandfound;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
@@ -25,11 +29,22 @@ public class ItemDetailActivity extends AppCompatActivity {
     private SharedPreferences sharedPreferences;
     private long itemId;
     private Item currentItem;
+    private Toolbar toolbar;
 
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_item_detail);
+
+        // Initialize toolbar
+        toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayShowHomeEnabled(true);
+            getSupportActionBar().setTitle("Item Details");
+        }
 
         // Initialize views
         ivItemImage = findViewById(R.id.ivItemImage);
@@ -68,6 +83,16 @@ public class ItemDetailActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @SuppressLint("SetTextI18n")
     private void loadItemDetails() {
         currentItem = databaseHelper.getItem(itemId);
         if (currentItem == null) {
@@ -124,16 +149,21 @@ public class ItemDetailActivity extends AppCompatActivity {
             return;
         }
 
-        // In a real app, you would implement a way for the user to provide proof
-        // For this example, we'll just use a simple text proof
         String claimProof = "User claims this item belongs to them";
 
         int result = databaseHelper.updateItemStatus(itemId, "claimed", userId, claimProof);
         if (result > 0) {
             Toast.makeText(this, "Item claimed successfully. Waiting for admin approval.", Toast.LENGTH_SHORT).show();
+            setResult(RESULT_OK);
             finish();
         } else {
             Toast.makeText(this, "Failed to claim item", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        overridePendingTransition(R.anim.slide_out_left, R.anim.slide_in_right);
     }
 }
